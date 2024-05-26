@@ -10,6 +10,7 @@ import collections
 import pathlib
 import typing
 import winreg
+import time
 import pydantic
 
 LocoInfo = collections.namedtuple("LocoInfo", ("provider", "product", "engine"))
@@ -124,6 +125,69 @@ class RailDriver:
             the current value for this control
         """
         return self.get_controller_value(index_or_name, "current")
+    
+    @property
+    def regulator(self) -> float:
+        return self.get_current_controller_value("Regulator")
+    
+    @regulator.setter
+    @pydantic.validate_call
+    def regulator(self, value: typing.Annotated[float, pydantic.Field(ge=0, le=100)]) -> None:
+        self.set_controller_value("Regulator", value / 100)
+
+    @property
+    def reverser(self) -> float:
+        return self.get_current_controller_value("Reverser")
+    
+    @reverser.setter
+    @pydantic.validate_call
+    def reverser(self, value: typing.Annotated[float, pydantic.Field(ge=-100, le=100)]) -> None:
+        self.set_controller_value("Reverser", value / 100)
+
+    @property
+    def train_brake(self) -> float:
+        return self.get_current_controller_value("TrainBrakeControl")
+    
+    @train_brake.setter
+    @pydantic.validate_call
+    def train_brake(self, value: typing.Annotated[float, pydantic.Field(ge=0, le=100)]) -> None:
+        self.set_controller_value("TrainBrakeControl", value / 100)
+
+    @property
+    def simple_throttle(self) -> float:
+        return self.get_current_controller_value("SimpleThrottle")
+    
+    @simple_throttle.setter
+    @pydantic.validate_call
+    def simple_throttle(self, value: typing.Annotated[float, pydantic.Field(ge=0, le=100)]) -> None:
+        self.set_controller_value("SimpleThrottle", value / 100)
+
+    @property
+    def virtual_brake(self) -> float:
+        return self.get_current_controller_value("VirtualBrake")
+    
+    @virtual_brake.setter
+    @pydantic.validate_call
+    def virtual_brake(self, value: typing.Annotated[float, pydantic.Field(ge=0, le=100)]) -> None:
+        self.set_controller_value("VirtualBrake", value / 100)
+
+    @property
+    def dynamic_brake(self) -> float:
+        return self.get_current_controller_value("DynamicBrake")
+    
+    @dynamic_brake.setter
+    @pydantic.validate_call
+    def dynamic_brake(self, value: typing.Annotated[float, pydantic.Field(ge=0, le=100)]) -> None:
+        self.set_controller_value("DynamicBrake", value / 100)
+
+    @property
+    def speed(self) -> float:
+        try:
+            _value = self.get_current_controller_value("SpeedometerKPH")
+        except ValueError:
+            _value =  self.get_current_controller_value("SpeedometerMPH")
+        
+        return round(_value, 1)
 
     @property
     def coordinates(self) -> tuple[float, float]:
@@ -213,6 +277,26 @@ class RailDriver:
             loco_info[i] = component
 
         return LocoInfo(*loco_info)
+    
+    def horn(self, duration: float=1.0) -> None:
+        self.set_controller_value("Horn", 1)
+        time.sleep(duration)
+        self.set_controller_value("Horn", 0)
+
+    def bell(self, duration: float=1.0) -> None:
+        self.set_controller_value("Bell", 1)
+        time.sleep(duration)
+        self.set_controller_value("Bell", 0)
+
+    def wipers(self) -> bool:
+        current_state = self.get_current_controller_value("Wipers")
+        self.set_controller_value("Wipers", not current_state)
+        return not current_state
+
+    def aws_reset(self) -> None:
+        self.set_controller_value("AWSReset", 1)
+        time.sleep(0.1)
+        self.set_controller_value("AWSReset", 0)
 
     def get_max_controller_value(self, index_or_name: int | str) -> float:
         """Syntactic sugar for get_controller_value(index_or_name, "max")
