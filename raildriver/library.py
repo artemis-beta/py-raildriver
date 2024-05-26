@@ -1,45 +1,59 @@
+"""
+RailDriver
+==========
+
+The main interface for communicating with the RailDriver DLL on the Windows system
+"""
 import ctypes
 import datetime
-import os
+import collections
+import pathlib
+import typing
+import winreg
+import pydantic
 
-from six.moves import winreg
+LocoInfo = collections.namedtuple("LocoInfo", ("provider", "product", "engine"))
 
 
-VALUE_CURRENT = 0
-VALUE_MIN = 1
-VALUE_MAX = 2
-
-
-class RailDriver(object):
-
-    dll = None
-
-    _restypes = {
+class RailDriver:
+    """The main API for communication with the RailDriver dynamic library file"""
+    _restypes: dict[str, typing.Type] = {
         'GetControllerList': ctypes.c_char_p,
         'GetLocoName': ctypes.c_char_p,
         'GetControllerValue': ctypes.c_float,
     }
 
-    def __init__(self, dll_location=None):
-        """
-        Initializes the raildriver.dll interface.
+    @pydantic.validate_call
+    def __init__(self, dll_location: pydantic.FilePath | None=None, x86: bool=False) -> None:
+        """Initializes the raildriver.dll interface.
 
-        :param dll_location Optionally pass the location of raildriver.dll if in some custom location.
-                            If not passed will try to guess the location by using the Windows Registry.
+        Parameters
+        ----------
+        dll_location : str | None, optional
+            Optionally pass the location of raildriver.dll if in some custom location.
+            If not passed will try to guess the location by using the Windows Registry.
+        x86 : bool, optional
+            if dll to be found automatically use 32-bit version instead of 64-bit version 
+
+        Raises
+        ------
+        EnvironmentError
+            if the dll location cannot be deduced automatically
         """
         if not dll_location:
             steam_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Software\\Valve\\Steam')
             steam_path = winreg.QueryValueEx(steam_key, 'SteamPath')[0]
-            railworks_path = os.path.join(steam_path, 'steamApps', 'common', 'railworks', 'plugins')
-            dll_location = os.path.join(railworks_path, 'raildriver.dll')
-            if not os.path.isfile(dll_location):
-                raise EnvironmentError('Unable to automatically locate raildriver.dll.')
-        self.dll = ctypes.cdll.LoadLibrary(dll_location)
-        for function_name, restype in self._restypes.items():
-            getattr(self.dll, function_name).restype = restype
+            railworks_path = pathlib.Path(steam_path).joinpath('steamapps', 'common', 'railworks', 'plugins')
+            dll_location = railworks_path.joinpath(f"raildriver{'' if x86 else '64'}.dll")
+            if not dll_location.is_file():
+                raise EnvironmentError(f"Unable to automatically locate raildriver{'' if x86 else '64'}.dll")
 
-    def __repr__(self):
-        return 'raildriver.RailDriver: {}'.format(self.dll)
+        self._dll: ctypes.CDLL = ctypes.cdll.LoadLibrary(f"{dll_location}")
+        for function_name, restype in self._restypes.items():
+            getattr(self._dll, function_name).restype = restype
+
+    def __repr__(self) -> str:
+        return f"raildriver.RailDriver: {self._dll}"
 
     def get_controller_index(self, name):
         for idx, n in self.get_controller_list():
@@ -47,145 +61,212 @@ class RailDriver(object):
                 return idx
         raise ValueError('Controller index not found for {}'.format(name))
 
-    def get_controller_list(self):
-        """
-        Returns an iterable of tuples containing (index, controller_name) pairs.
+    def get_controller_list(self) -> typing.Iterable[tuple[int, str]]:
+        """Returns an iterable of tuples containing (index, controller_name) pairs.
 
         Controller indexes start at 0.
 
+        Example
+        -------
         You may easily transform this to a {name: index} mapping by using:
 
         >>> controllers = {name: index for index, name in raildriver.get_controller_list()}
 
-        :return enumerate
+        Returns
+        -------
+        typing.Iterable[tuple[int, str]]
+            enumeration of controls
         """
-        ret_str = self.dll.GetControllerList().decode()
+
+        ret_str: str = self._dll.GetControllerList().decode()
         if not ret_str:
             return []
         return enumerate(ret_str.split('::'))
 
-    def get_controller_value(self, index_or_name, value_type):
-        """
-        Returns current/min/max value of controller at given index or name.
+    @pydantic.validate_call
+    def get_controller_value(self, index_or_name: int | str, value_type: typing.Literal["current", "min", "max"]) -> float:
+        """Returns current/min/max value of controller at given index or name.
 
         It is much more efficient to query using an integer index rather than string name.
         Name is fine for seldom updates but it's not advised to be used every second or so.
         See `get_controller_list` for an example how to cache a dictionary of {name: index} pairs.
 
-        :param index_or_name integer index or string name
-        :param value_type one of VALUE_CURRENT, VALUE_MIN, VALUE_MAX
-        :return float
+        Parameters
+        ----------
+        index_or_name : int | str
+            integer index or string name
+        value_type : Literal['current', 'min', 'max']
+            type of value to return
+
+        Returns
+        -------
+        float
+
         """
         if not isinstance(index_or_name, int):
             index = self.get_controller_index(index_or_name)
         else:
             index = index_or_name
-        return self.dll.GetControllerValue(index, value_type)
+        value_type_int = ("current", "min", "max").index(value_type)
+        return self._dll.GetControllerValue(index, value_type_int)
 
-    def get_current_controller_value(self, index_or_name):
+    def get_current_controller_value(self, index_or_name: int | str) -> float:
+        """Syntactic sugar for get_controller_value(index_or_name, "current")
+
+        Parameters
+        ----------
+        index_or_name : int | str
+            either the index or name of the control
+
+        Returns
+        -------
+        float
+            the current value for this control
         """
-        Syntactic sugar for get_controller_value(index_or_name, VALUE_CURRENT)
+        return self.get_controller_value(index_or_name, "current")
 
-        :param index_or_name integer index or string name
-        :return: float
-        """
-        return self.get_controller_value(index_or_name, VALUE_CURRENT)
+    @property
+    def coordinates(self) -> tuple[float, float]:
+        """Get current geocoordinates (lat, lon) of train
 
-    def get_current_coordinates(self):
-        """
-        Get current geocoordinates (lat, lon) of train
-
-        :return: tuple (lat, lon)
+        Returns
+        -------
+        tuple[float, float]
+            latitude
+            longitude
         """
         return self.get_current_controller_value(400), self.get_current_controller_value(401)
 
-    def get_current_fuel_level(self):
-        """
-        Get current fuel level of train
+    @property
+    def fuel_level(self) -> float:
+        """Get current fuel level of train
 
-        :return: float
+        Returns
+        -------
+        float
+            current fuel level
         """
         return self.get_current_controller_value(402)
 
-    def get_current_gradient(self):
-        """
-        Get current gradient
+    @property
+    def gradient(self):
+        """Get current gradient
 
-        return: float
+        Returns
+        -------
+        float
+            current gradient
         """
         return self.get_current_controller_value(404)
 
-    def get_current_heading(self):
-        """
-        Get current heading
+    @property
+    def heading(self) -> float:
+        """Get current heading
+       
 
-        return: float
+        Returns
+        -------
+        float
+            current heading
         """
         return self.get_current_controller_value(405)
 
-    def get_current_is_in_tunnel(self):
-        """
-        Check if the train is currently (mostly) in tunnel
+    @property
+    def in_tunnel(self) -> bool:
+        """Check if the train is currently (mostly) in tunnel     
 
-        :return: bool
+        Returns
+        -------
+        float
+            current tunnel status
         """
         return bool(self.get_current_controller_value(403))
 
-    def get_current_time(self):
-        """
-        Get current time
+    @property
+    def current_time(self) -> datetime.time:
+        """Get current time
 
-        :return: datetime.time
+        Returns
+        -------
+        datetime.time
+            current time
         """
         hms = [int(self.get_current_controller_value(i)) for i in range(406, 409)]
         return datetime.time(*hms)
 
-    def get_loco_name(self):
+    @property
+    def loco_name(self) -> LocoInfo | None:
         """
         Returns the Provider, Product and Engine name.
 
-        :return list
+        Returns
+        -------
+        LocoInfo
+            containing provider, product and engine
         """
-        ret_str = self.dll.GetLocoName().decode()
+        ret_str: str = self._dll.GetLocoName().decode()
+        loco_info: list[str | None] = [None, None, None]
+
         if not ret_str:
             return
-        return ret_str.split('.:.')
+        for i, component in enumerate(ret_str.split(".:.")):
+            loco_info[i] = component
 
-    def get_max_controller_value(self, index_or_name):
+        return LocoInfo(*loco_info)
+
+    def get_max_controller_value(self, index_or_name: int | str) -> float:
+        """Syntactic sugar for get_controller_value(index_or_name, "max")
+
+        Parameters
+        ----------
+        index_or_name : int | str
+            either the index or name of the control
+
+        Returns
+        -------
+        float
+            the maximum value for this control
         """
-        Syntactic sugar for get_controller_value(index_or_name, VALUE_MAX)
+        return self.get_controller_value(index_or_name, "max")
 
-        :param index_or_name integer index or string name
-        :return: float
+    def get_min_controller_value(self, index_or_name: str | int) -> float:
+        """Syntactic sugar for get_controller_value(index_or_name, "min")
+
+        Parameters
+        ----------
+        index_or_name : int | str
+            either the index or name of the control
+
+        Returns
+        -------
+        float
+            the minimum value for this control
         """
-        return self.get_controller_value(index_or_name, VALUE_MAX)
+        return self.get_controller_value(index_or_name, "min")
 
-    def get_min_controller_value(self, index_or_name):
-        """
-        Syntactic sugar for get_controller_value(index_or_name, VALUE_MIN)
+    @pydantic.validate_call
+    def set_controller_value(self, index_or_name: pydantic.NonNegativeInt | str, value: float) -> None:
+        """Sets value of controller control
 
-        :param index_or_name integer index or string name
-        :return: float
-        """
-        return self.get_controller_value(index_or_name, VALUE_MIN)
-
-    def set_controller_value(self, index_or_name, value):
-        """
-        Sets controller value
-
-        :param index_or_name integer index or string name
-        :param value float
+        Parameters
+        ----------
+        index_or_name : int | str
+            either the index or the name of the controller
+        value : float
+            the new value for this control
         """
         if not isinstance(index_or_name, int):
             index = self.get_controller_index(index_or_name)
         else:
             index = index_or_name
-        self.dll.SetControllerValue(index, ctypes.c_float(value))
+        self._dll.SetControllerValue(index, ctypes.c_float(value))
 
-    def set_rail_driver_connected(self, value):
-        """
-        Needs to be called after instantiation in order to exchange data with Train Simulator
+    def set_rail_driver_connected(self, connect: bool) -> None:
+        """Needs to be called after instantiation in order to exchange data with Train Simulator
 
-        :param bool True to start exchanging data, False to stop
+        Parameters
+        ----------
+        connect : bool
+            whether to connect/disconnect
         """
-        self.dll.SetRailDriverConnected(True)
+        self._dll.SetRailDriverConnected(connect)

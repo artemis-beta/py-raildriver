@@ -1,5 +1,3 @@
-from raildriver.library import *
-from raildriver import events
-
-
-VERSION = (1, 1, 5)
+from raildriver.library import RailDriver as RailDriver
+from raildriver.library import LocoInfo as LocoInfo
+from raildriver import events as events

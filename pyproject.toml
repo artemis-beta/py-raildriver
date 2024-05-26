@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "raildriver"
+version = "1.2.0"
+description = "Python interface to Train Simulator Classic"
+authors = ["Piotr Kilczuk <piotr@tymaszweb.pl>", "Kristian Zarebski <krizar312@gmail.com>"]
+license = "MIT"
+readme = "README.rst"
+classifiers = [
+    'Development Status :: 5 - Production/Stable',
+    'Intended Audience :: Developers',
+    'License :: OSI Approved :: MIT License',
+    'Operating System :: Microsoft :: Windows',
+    'Programming Language :: Python',
+    'Topic :: Software Development :: Libraries',
+]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pydantic = "^2.7.1"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.1"
+mock = "^5.1.0"
+six = "^1.16.0"
+pytest-cov = "^5.0.0"
+
+[tool.pytest.ini_options]
+addopts = "-p no:warnings --cov=raildriver"
+testpaths = [
+    "tests"
+]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
