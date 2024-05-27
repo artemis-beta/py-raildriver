@@ -1,6 +1,6 @@
 # py-raildriver
 
-Python interface to Train Simulator Classic. The aim of this project is to ease communication with either `raildriver64.dll` or `raildriver.dll` provided with Train Simulator. Requires Python 3.10+. The code is provided under the MIT license.
+Python interface to Train Simulator Classic. The aim of this project is to ease communication with either `raildriver64.dll` or `raildriver.dll` provided with Train Simulator. The code in this version (v2+) requires Python 3.10+. The code is provided under the MIT license.
 
 ## Installation
 
