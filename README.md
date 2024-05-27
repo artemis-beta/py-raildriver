@@ -1,6 +1,6 @@
 # py-raildriver
 
-Python interface to Train Simulator Classic. The aim of this project is to ease communication with either `raildriver64.dll` or `raildriver.dll` provided with Train Simulator. The code in this version (v2+) requires Python 3.10+. The code is provided under the MIT license.
+Python interface to Train Simulator Classic, this now expands on the original code by Piotr Kilczuk. The aim of this project is to ease communication with either `raildriver64.dll` or `raildriver.dll` provided with Train Simulator. The code in this version (v2+) requires Python 3.10+. The code is provided under the MIT license.
 
 ## Installation
 
@@ -38,7 +38,7 @@ Start your `Railworks.exe`/`Railworks64.exe`, get running, pause and try this in
 ## Bugs & Contributing
 
 Please use Github to report bugs and feature requests:
-http://github.com/centralniak/py-raildriver
+http://github.com/artemis-beta/py-raildriver
 
 Code contributions are of course more than welcome. Please remember about unit tests or your code might not be accepted.
 You can run the test suite with:::
