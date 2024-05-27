@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "raildriver"
-version = "1.2.0"
+version = "2.0.0"
 description = "Python interface to Train Simulator Classic"
 authors = ["Piotr Kilczuk <piotr@tymaszweb.pl>", "Kristian Zarebski <krizar312@gmail.com>"]
 license = "MIT"
