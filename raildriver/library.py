@@ -180,6 +180,21 @@ class RailDriver:
     def dynamic_brake(self, value: typing.Annotated[float, pydantic.Field(ge=0, le=100)]) -> None:
         self.set_controller_value("DynamicBrake", value / 100)
 
+    def has_control(self, control: str) -> bool:
+        """Check if the given control is available
+
+        Parameters
+        ----------
+        control : str
+            control label
+
+        Returns
+        -------
+        bool
+            if control exists
+        """
+        return control in dict(self.get_controller_list()).values()
+
     @property
     def speed(self) -> float:
         try:
